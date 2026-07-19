@@ -257,36 +257,37 @@ the fixes end-to-end and catching one deeper bug the first pass had masked.
 
 1. **Run-level `--trials`.** A plain run rejected `--trials` (only `bench` had
    it), so bounding a run's cost meant editing YAML. `--trials <n>` now
-   overrides the suite/case value on runs (`cli.js`, `run.js` `RunConfig.trials`,
+   overrides the suite/case value on runs (`cli.ts`, `core/eval-runner.ts` `RunConfig.trials`,
    precedence `CLI > case > suite > default`).
 
 2. **Per-suite/case `cwd`.** Repo-context skills only fire where there's
    something to act on; the same prompt fired `none` in an empty dir and `1/1`
    in a real repo. A suite (or case) now takes `cwd:`, resolved relative to the
-   eval file, plumbed to `runClaude` (`cwd.js`, `run.js`, `bench.js`). Pass 2
+   eval file, plumbed to the agent runner (`suite/cwd.ts`, `core/eval-runner.ts`,
+   `core/bench-runner.ts`). Pass 2
    proved it: `review-pr`'s happy cases fired in-repo via `cwd: ../..` instead
    of `fired: none`.
 
 3. **Early-exit cost is a lower bound.** A fast-passing trigger case is
    `SIGKILL`ed before the `result` event that carries `total_cost_usd`, so it
    reports `$0`. The outcome now flags `stoppedEarly`, and the summary renders
-   `≥ $X` when any trial exited early (`claude.js`, `report.js`) — and stays
+   `≥ $X` when any trial exited early (`agent/claude-cli.ts`, `report/render.ts`) — and stays
    exact when every case runs to completion.
 
 4. **`lint` spares command templates.** The angle-bracket placeholder check now
    strips inline `` `code` `` spans first, so `` `git diff <fixed-point>...HEAD` ``
-   no longer trips `warning placeholder` (`lint.js`).
+   no longer trips `warning placeholder` (`skill-md/lint.ts`).
 
 5. **Legible zero-match filter.** A discovered-but-filtered-empty suite now
    reports `N suite(s) discovered, but no case id matches filter "X"` instead of
-   the misleading "no eval suites found" (`load.js` `filteredOut`, `cli.js`).
+   the misleading "no eval suites found" (`suite/load.ts` `filteredOut`, `commands/helpers.ts`).
 
 6. **Offline `validate`.** `skillevel validate [target]` parses suites with no
    `claude` calls, reports schema errors, and previews the run count
    (`≈ N claude runs` for eval, `≈ M` for bench) — the pre-flight before paying
-   (`cli.js`).
+   (`commands/validate.ts`).
 
-7. **Broader trigger-keyword extraction.** `resolve.js` now scans description
+7. **Broader trigger-keyword extraction.** `suite/resolve.ts` now scans description
    **+ body**, strips markdown, and recognises localized markers (English
    `Triggers`, Korean `트리거`, Japanese `トリガー`) — so `new tidy-first` now
    quotes its real Korean trigger list instead of the "no explicit list"
@@ -343,3 +344,30 @@ Also closed: the invisible `expect_skill` "sibling must actually fire" semantic
   a manual symlink into `~/.claude/skills`.
 - **Cost precision** — `≥ $X` is honest but coarse; estimating early-exit spend
   from `num_turns` would tighten it.
+
+## Code layout (TypeScript)
+
+The source is TypeScript (`tsc` → `dist/`, published as the `skillevel` bin),
+layered so each dependency points inward and every use case is testable
+offline:
+
+```
+src/
+  cli.ts          # entry point: commander wiring, TTY progress, exit codes
+  commands/       # use-case layer — one function per subcommand; takes a
+                  #   CommandContext (io + runner), returns an exit code
+  core/           # domain: types, case classification, checks, the eval and
+                  #   bench runners, pure result summaries
+  agent/          # the `claude -p` boundary: AgentRunner port, the subprocess
+                  #   adapter, pure NDJSON stream interpretation, LLM judge
+  suite/          # eval-file discovery, YAML loading/validation, skill lookup
+  skill-md/       # SKILL.md domain: frontmatter/grammar, lint, fmt, scaffolds
+  report/         # terminal rendering of results
+  shared/         # fs walker, worker pool
+```
+
+The single seam that matters is **`AgentRunner`** (`agent/agent-runner.ts`):
+runners, bench, and the judge depend on that interface, never on the
+subprocess. `tests/` (vitest) exercises every scoring, routing, early-stop,
+lift, lint, and CLI-exit-code path with a scripted fake runner and real YAML
+in temp dirs — no `claude` binary, no network, no dollars.
