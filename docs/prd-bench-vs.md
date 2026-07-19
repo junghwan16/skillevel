@@ -88,7 +88,7 @@ inferring it from two separate `bench` runs.
    `--vs <commit-sha>`.
 4. **TDD-style capture-then-fix.** A production case is noticed to misfire or
    answer badly. Rather than fixing the skill first and hoping the fix holds,
-   the author captures the failing prompt as a case *before* touching
+   the author captures the failing prompt as a case _before_ touching
    `SKILL.md` (red), edits the skill, then runs `--vs HEAD` to confirm the
    new version passes the just-captured case without regressing the existing
    ones (green). See "Related workflow" below — this is a natural companion
@@ -154,9 +154,9 @@ Reuses two things that already exist rather than inventing new plumbing:
    already runs a case twice and grades both with `evaluateOutputChecks`
    (no trigger check — confirmed content-only, see `src/assert.js:24-25`).
    `--vs` mode swaps what varies between the two calls: today it's
-   `disallowSkills: true/false` on the *same* installed skill; in `--vs`
+   `disallowSkills: true/false` on the _same_ installed skill; in `--vs`
    mode it's `cwd: tmpDirOld` vs. `cwd: undefined` (or the working copy's own
-   dir) on *different SKILL.md contents*, with `disallowSkills` unset on
+   dir) on _different SKILL.md contents_, with `disallowSkills` unset on
    both arms (both must be free to trigger).
 3. **Cleanup.** Temp dir is per-run, removed after the batch completes (or
    left with a `--keep-tmp` escape hatch for debugging — matches the spirit
