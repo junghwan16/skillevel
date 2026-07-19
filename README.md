@@ -17,16 +17,16 @@ You describe both in a small YAML file; `skillevel` runs each case repeatedly
 through `claude -p`, scores the pass-rate, and prints a familiar test report:
 
 ```bash
-$ skillevel sql
+$ skillevel commit-style
 
-sql  ./sql.eval.yaml
-  ✓ happy-recent-orders   5/5
-  ✓ happy-count-signups   5/5
-  ✗ neg-concept           3/5
-      ✗ stays out (sql) — fired: sql
-  ○ happy-joins           TODO — unwritten
+commit-style  ./commit-style.eval.yaml
+  ✓ happy-staged-changes   5/5
+  ✓ happy-bugfix           5/5
+  ✗ neg-explain-format     3/5
+      ✗ stays out (commit-style) — fired: commit-style
+  ○ happy-breaking         TODO — unwritten
 
-1 failed · 2 passed · 1 todo   $0.28
+1 failed · 2 passed · 1 todo   $0.21
 ```
 
 It also covers the write side of the loop: `new` scaffolds a `SKILL.md`,
@@ -38,43 +38,46 @@ Requires [Claude Code](https://claude.com/claude-code) on your `PATH` (the
 `claude` CLI, logged in) and Node ≥ 18. No install needed — `npx` works, or
 `npm i -g skillevel` for a global command.
 
+Say your team keeps a `commit-style` skill that writes conventional commit
+messages following your rules.
+
 **1. Scaffold with one command:**
 
 ```bash
-npx skillevel@latest new sql
+npx skillevel@latest new commit-style
 ```
 
 `new` creates whatever the skill is missing and skips what's already there:
-if no skill named `sql` exists (locally or installed), it scaffolds
-`sql/SKILL.md`; either way it scaffolds `sql.eval.yaml`, reading the skill's
-own `SKILL.md` and quoting its trigger keywords into a comment. It leaves
-clearly-marked placeholders — it never invents cases for you (auto-generated
-tests plant plausible-but-wrong checks).
+if no skill named `commit-style` exists (locally or installed), it scaffolds
+`commit-style/SKILL.md`; either way it scaffolds `commit-style.eval.yaml`,
+reading the skill's own `SKILL.md` and quoting its trigger keywords into a
+comment. It leaves clearly-marked placeholders — it never invents cases for
+you (auto-generated tests plant plausible-but-wrong checks).
 
 **2. Replace the placeholders with real prompts** — things you (or your
 users) actually typed. Aim for ~5 that should fire and ~5 near-misses that
 must not:
 
 ```yaml
-skill: sql
+skill: commit-style
 trials: 5
 
 cases:
-  - id: happy-recent-orders
-    prompt: "Show the 10 most recent orders from the database"
+  - id: happy-staged-changes
+    prompt: "Write a commit message for the staged changes"
     should_trigger: true
     expect:
-      - match: "SELECT" # and the answer should contain SQL
+      - match: "(feat|fix|chore)(\\(.+\\))?:" # answer follows the format
 
-  - id: neg-concept # adjacent topic — must NOT fire
-    prompt: "What's the difference between an inner and outer join?"
+  - id: neg-explain-format # adjacent topic — must NOT fire
+    prompt: "What's the difference between feat and fix in conventional commits?"
     should_trigger: false
 ```
 
 **3. Run it:**
 
 ```bash
-npx skillevel sql
+npx skillevel commit-style
 ```
 
 Red cases tell you exactly how the skill misfired (`fired: <skill>`); edit
@@ -82,7 +85,7 @@ the skill's `description`, run again, repeat until green. When it triggers
 right, measure whether it actually improves answers:
 
 ```bash
-npx skillevel bench sql
+npx skillevel bench commit-style
 ```
 
 ## Commands
@@ -112,9 +115,9 @@ Every case is a `prompt` plus a trigger expectation — either
 `should_trigger: true|false`, or the routing form `expect_skill`:
 
 ```yaml
-- id: collision-1
-  prompt: "Pull the last hour of adnsvc error logs"
-  expect_skill: log-query # the sibling must win; this suite's skill must stay out
+- id: collision-pr-description
+  prompt: "Draft a description for this pull request"
+  expect_skill: pr-desc # the sibling must win; commit-style must stay out
 ```
 
 `expect_skill: <sibling>` pins down the #1 failure mode of a growing skill
@@ -149,15 +152,15 @@ twice — once with the skill available, once with skills blocked
 `match` / `absent` / `judge` expectations, and reports the lift:
 
 ```bash
-$ skillevel bench sql
+$ skillevel bench commit-style
 
-sql  ./sql.eval.yaml
+commit-style  ./commit-style.eval.yaml
   case                    with   without    lift
-  aggregate-revenue        3/3       1/3   +67pp
-  safe-delete              3/3       3/3     0pp
-  neg-concept           — skipped (needs should_trigger: true + match/absent/judge)
+  happy-staged-changes     3/3       1/3   +67pp
+  happy-bugfix             3/3       3/3     0pp
+  neg-explain-format    — skipped (needs should_trigger: true + match/absent/judge)
 
-▲ skill lift: +34pp   (48% → 82%)   2 benched · 1 skipped   $1.10
+▲ skill lift: +34pp   (48% → 82%)   2 benched · 1 skipped   $0.85
 ```
 
 How to read it:
@@ -193,9 +196,9 @@ under test — fine unless the prompt would have pulled in a sibling.
 ```bash
 $ skillevel lint
 
-sql/SKILL.md
+commit-style/SKILL.md
   error unexpected-key — unexpected frontmatter key(s): triggers (allowed: …)
-  warning broken-reference — referenced file does not exist: references/schema.md
+  warning broken-reference — referenced file does not exist: references/rules.md
 
 1 file · 1 errors · 1 warnings
 ```

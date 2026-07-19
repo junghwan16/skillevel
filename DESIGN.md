@@ -23,8 +23,8 @@ skill, graded, reported as lift.
 - It **adopts the community `evals/cases.yaml` schema** (from the `skill-eval`
   skill) rather than inventing one. Cases stay portable; skillevel is just the
   most ergonomic runner + scaffolder for them.
-- Mental model: **vitest for skills**. Auto-discovery, `--watch`, reporters,
-  `trials` = built-in flake handling, `--ci` = regression gate.
+- Mental model: **vitest for skills**. Auto-discovery, `trials` = built-in
+  flake handling, `--ci` = regression gate.
 
 ## Commands
 
@@ -76,7 +76,7 @@ cases:
 - `triggered` / `not_triggered` in `expect` are redundant shorthands (validated
   against `should_trigger`); `match` / `absent` / `judge` add output checks.
 - A **placeholder prompt** (contains `<...>`) marks the case as _unwritten_ — it
-  is reported as TODO and fails `--ci`, so `init` output can't silently pass.
+  is reported as TODO and fails `--ci`, so `new` output can't silently pass.
 
 ## `new` — one on-ramp; scaffold, don't generate
 
@@ -105,6 +105,7 @@ human writes the real cases — ideally from real usage/production traces.
 
 The same philosophy: **offline and deterministic**, templates and guidance
 only — never LLM-invented content.
+
 - `lint` splits its findings by authority: **errors** are the packaging /
   validation rules (ported from skill-creator's `quick_validate.py` — a skill
   that fails them won't install cleanly); **warnings** are authoring guidance
