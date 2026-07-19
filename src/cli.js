@@ -25,24 +25,39 @@ function main() {
   const program = new Command();
   program
     .name("skillevel")
-    .description("A test runner for Claude Code skills. Runs YAML cases through `claude -p`.")
+    .description(
+      "A test runner for Claude Code skills. Runs YAML cases through `claude -p`.",
+    )
     .version("0.1.0");
 
   program
-    .argument("[target]", "a skill name or an eval file; omit to run everything discovered")
+    .argument(
+      "[target]",
+      "a skill name or an eval file; omit to run everything discovered",
+    )
     .option("-w, --watch", "re-run on file changes")
     .option("-t, --filter <substr>", "only run cases whose id contains this")
     .option("-r, --reporter <name>", "grid | dot | json | junit", "grid")
-    .option("-c, --concurrency <n>", "parallel runs", String(DEFAULT_CONCURRENCY))
+    .option(
+      "-c, --concurrency <n>",
+      "parallel runs",
+      String(DEFAULT_CONCURRENCY),
+    )
     .option("-m, --model <model>", "override the model for all runs")
-    .option("--threshold <n>", "green pass-rate threshold (0..1)", String(DEFAULT_THRESHOLD))
+    .option(
+      "--threshold <n>",
+      "green pass-rate threshold (0..1)",
+      String(DEFAULT_THRESHOLD),
+    )
     .option("--json <file>", "also write full results as JSON to a file")
     .option("--ci", "exit non-zero on any failure or unwritten case")
     .action(runCommand);
 
   program
     .command("init <skill> [file]")
-    .description("Scaffold a cases file for a skill (template + guidance; you write the cases)")
+    .description(
+      "Scaffold a cases file for a skill (template + guidance; you write the cases)",
+    )
     .action(initCommand);
 
   program.parseAsync();
@@ -56,9 +71,16 @@ function main() {
  * @returns {Promise<void>}
  */
 async function runCommand(target, options) {
-  const suites = resolveSuites(typeof target === "string" ? target : undefined, /** @type {string} */ (options.filter));
+  const suites = resolveSuites(
+    typeof target === "string" ? target : undefined,
+    /** @type {string} */ (options.filter),
+  );
   if (suites.length === 0) {
-    console.error(pc.yellow("no eval suites found (looked for *.eval.yaml / evals/cases.yaml)"));
+    console.error(
+      pc.yellow(
+        "no eval suites found (looked for *.eval.yaml / evals/cases.yaml)",
+      ),
+    );
     process.exit(options.ci ? 1 : 0);
   }
 
@@ -90,7 +112,8 @@ async function runCommand(target, options) {
 async function executeAndReport(suites, config, options) {
   const results = await runSuites(suites, {
     ...config,
-    onProgress: (done, total) => process.stdout.write(`\r${pc.dim(`running ${done}/${total}…`)}   `),
+    onProgress: (done, total) =>
+      process.stdout.write(`\r${pc.dim(`running ${done}/${total}…`)}   `),
   });
   process.stdout.write(`\r${" ".repeat(30)}\r`); // clear progress line
 
@@ -115,7 +138,9 @@ async function executeAndReport(suites, config, options) {
 function initCommand(skill, file) {
   try {
     const { file: created, source } = initSuite(skill, file);
-    console.log(pc.green(`created ${created}`) + pc.dim(`  (skill: ${source})`));
+    console.log(
+      pc.green(`created ${created}`) + pc.dim(`  (skill: ${source})`),
+    );
     console.log(pc.dim(`edit it, then: skillevel ${skill}`));
   } catch (error) {
     console.error(pc.red(/** @type {Error} */ (error).message));
@@ -136,10 +161,15 @@ function resolveSuites(target, caseFilter) {
   for (const file of files) {
     try {
       const suite = loadSuite(file);
-      if (caseFilter) suite.cases = suite.cases.filter((testCase) => testCase.id.includes(caseFilter));
+      if (caseFilter)
+        suite.cases = suite.cases.filter((testCase) =>
+          testCase.id.includes(caseFilter),
+        );
       if (suite.cases.length > 0) suites.push(suite);
     } catch (error) {
-      console.error(pc.red(`skip ${file}: ${/** @type {Error} */ (error).message}`));
+      console.error(
+        pc.red(`skip ${file}: ${/** @type {Error} */ (error).message}`),
+      );
     }
   }
   return suites;
@@ -152,10 +182,14 @@ function resolveSuites(target, caseFilter) {
  * @returns {string[]}
  */
 function filesForTarget(target) {
-  if (target && fs.existsSync(target) && fs.statSync(target).isFile()) return [target];
+  if (target && fs.existsSync(target) && fs.statSync(target).isFile())
+    return [target];
   const all = discover();
   if (!target) return all;
-  return all.filter((file) => path.basename(path.dirname(file)) === target || file.includes(target));
+  return all.filter(
+    (file) =>
+      path.basename(path.dirname(file)) === target || file.includes(target),
+  );
 }
 
 /**
@@ -168,7 +202,9 @@ function filesForTarget(target) {
 async function watch(suites, runOnce) {
   const rerun = async () => {
     console.clear();
-    console.log(pc.dim(`skillevel --watch  ·  ${new Date().toLocaleTimeString()}`));
+    console.log(
+      pc.dim(`skillevel --watch  ·  ${new Date().toLocaleTimeString()}`),
+    );
     await runOnce();
     console.log(pc.dim("\nwatching for changes… (ctrl-c to quit)"));
   };

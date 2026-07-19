@@ -79,21 +79,15 @@ function glyph(caseResult) {
 }
 
 /**
- * @param {import('./types.js').CaseResult} caseResult
- * @returns {number} How many trials passed.
- */
-function passedTrials(caseResult) {
-  return caseResult.trials.filter((trial) => trial.pass).length;
-}
-
-/**
  * The first failing check of the first failing trial, for a hint line.
  *
  * @param {import('./types.js').CaseResult} caseResult
  * @returns {import('./types.js').CheckResult | undefined}
  */
 function firstFailure(caseResult) {
-  return caseResult.trials.find((trial) => !trial.pass)?.checks.find((check) => !check.ok);
+  return caseResult.trials
+    .find((trial) => !trial.pass)
+    ?.checks.find((check) => !check.ok);
 }
 
 /**
@@ -108,11 +102,18 @@ function renderGrid(suites) {
       const detail =
         caseResult.status === "todo"
           ? pc.yellow("TODO — unwritten")
-          : `${passedTrials(caseResult)}/${caseResult.trials.length}`;
-      lines.push(`  ${glyph(caseResult)} ${caseResult.id.padEnd(18)} ${pc.dim(detail)}`);
+          : `${caseResult.passed}/${caseResult.trials.length}`;
+      lines.push(
+        `  ${glyph(caseResult)} ${caseResult.id.padEnd(18)} ${pc.dim(detail)}`,
+      );
       if (caseResult.status === "fail") {
         const failure = firstFailure(caseResult);
-        if (failure) lines.push(pc.dim(`      ✗ ${failure.label}${failure.detail ? ` — ${failure.detail}` : ""}`));
+        if (failure)
+          lines.push(
+            pc.dim(
+              `      ✗ ${failure.label}${failure.detail ? ` — ${failure.detail}` : ""}`,
+            ),
+          );
       }
     }
   }
@@ -126,7 +127,13 @@ function renderGrid(suites) {
 function renderDot(suites) {
   return suites
     .flatMap((suite) => suite.cases)
-    .map((c) => (c.status === "pass" ? pc.green(".") : c.status === "todo" ? pc.yellow("○") : pc.red("F")))
+    .map((c) =>
+      c.status === "pass"
+        ? pc.green(".")
+        : c.status === "todo"
+          ? pc.yellow("○")
+          : pc.red("F"),
+    )
     .join("");
 }
 
@@ -138,12 +145,18 @@ function renderJUnit(suites) {
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<testsuites>"];
   for (const suite of suites) {
     const failures = suite.cases.filter((c) => c.status === "fail").length;
-    lines.push(`  <testsuite name="${xml(suite.skill)}" tests="${suite.cases.length}" failures="${failures}">`);
+    lines.push(
+      `  <testsuite name="${xml(suite.skill)}" tests="${suite.cases.length}" failures="${failures}">`,
+    );
     for (const caseResult of suite.cases) {
-      lines.push(`    <testcase name="${xml(caseResult.id)}" classname="${xml(suite.skill)}">`);
+      lines.push(
+        `    <testcase name="${xml(caseResult.id)}" classname="${xml(suite.skill)}">`,
+      );
       if (caseResult.status === "fail") {
         const failure = firstFailure(caseResult);
-        lines.push(`      <failure message="${xml(failure?.label ?? "failed")}">${xml(failure?.detail ?? "")}</failure>`);
+        lines.push(
+          `      <failure message="${xml(failure?.label ?? "failed")}">${xml(failure?.detail ?? "")}</failure>`,
+        );
       } else if (caseResult.status === "todo") {
         lines.push(`      <skipped message="unwritten placeholder"/>`);
       }
@@ -162,5 +175,9 @@ function renderJUnit(suites) {
  * @returns {string}
  */
 function xml(value) {
-  return value.replace(/[<>&"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[ch] ?? ch);
+  return value.replace(
+    /[<>&"]/g,
+    (ch) =>
+      ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[ch] ?? ch,
+  );
 }

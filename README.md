@@ -53,16 +53,16 @@ The format is the community `evals/cases.yaml` schema (from the `skill-eval`
 skill), so your cases aren't locked to this tool:
 
 ```yaml
-skill: sql               # leaf name; must match the Skill tool's skill name
-trials: 5                # runs per case (variance); per-case override allowed
+skill: sql # leaf name; must match the Skill tool's skill name
+trials: 5 # runs per case (variance); per-case override allowed
 cases:
   - id: happy-1
     prompt: "Show the 10 most recent orders from the database"
     should_trigger: true
     expect:
       - triggered
-      - match: "SELECT"        # case-insensitive regex in the response
-      - absent: "DELETE"       # regex must NOT appear
+      - match: "SELECT" # case-insensitive regex in the response
+      - absent: "DELETE" # regex must NOT appear
   - id: neg-1
     prompt: "Refactor this Python function"
     should_trigger: false
@@ -76,13 +76,13 @@ ones, ideally from real usage traces.
 
 ### Expectations
 
-| entry            | passes when                                             |
-| ---------------- | ------------------------------------------------------ |
-| `should_trigger` | the target skill fired (`true`) / did not (`false`)    |
-| `triggered` / `not_triggered` | shorthands validated against `should_trigger` |
-| `match: <re>`    | the case-insensitive regex appears in the response      |
-| `absent: <re>`   | the regex does **not** appear                          |
-| `judge: <q>`     | a fresh Claude grades the response `PASS` *(v1.1)*     |
+| entry                         | passes when                                         |
+| ----------------------------- | --------------------------------------------------- |
+| `should_trigger`              | the target skill fired (`true`) / did not (`false`) |
+| `triggered` / `not_triggered` | shorthands validated against `should_trigger`       |
+| `match: <re>`                 | the case-insensitive regex appears in the response  |
+| `absent: <re>`                | the regex does **not** appear                       |
+| `judge: <q>`                  | a fresh Claude grades the response `PASS` _(v1.1)_  |
 
 A case's score is `passes / trials`; it's green at `>= 0.8` (configurable) so one
 flake doesn't fail it. A prompt with an unfilled `<placeholder>` is reported as
@@ -99,7 +99,7 @@ kills the run the moment the verdict is known, to save cost.
 ## Status
 
 v1 measures **triggering** (over/under-firing). It does not yet measure whether
-the skill improves the *output* — that's the v2 skill-on/off A/B with an
+the skill improves the _output_ — that's the v2 skill-on/off A/B with an
 LLM grader. See [DESIGN.md](./DESIGN.md).
 
 ## License

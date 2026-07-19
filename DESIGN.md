@@ -40,18 +40,18 @@ skillevel init sql           # scaffold a cases file from the skill (template + 
 ## Case format (adopted from skill-eval)
 
 ```yaml
-skill: sql               # leaf name; must match the Skill tool's skill name
-trials: 5                # runs per case (variance); per-case override allowed
+skill: sql # leaf name; must match the Skill tool's skill name
+trials: 5 # runs per case (variance); per-case override allowed
 # model: sonnet          # optional
 # triggerThreshold: 0.8  # case is green if pass-rate >= this (default 0.8)
 cases:
   - id: happy-1
     prompt: "..."
     should_trigger: true
-    expect:              # optional extra asserts, on top of the trigger check
+    expect: # optional extra asserts, on top of the trigger check
       - triggered
-      - match: "SELECT"       # case-insensitive regex in the response
-      - absent: "DELETE"      # regex must NOT appear
+      - match: "SELECT" # case-insensitive regex in the response
+      - absent: "DELETE" # regex must NOT appear
       # - judge: "is the query read-only and correctly scoped?"  # LLM-graded (v1.1)
   - id: neg-1
     prompt: "..."
@@ -62,7 +62,7 @@ cases:
 - `should_trigger` is the **primary check**: did the target skill fire?
 - `triggered` / `not_triggered` in `expect` are redundant shorthands (validated
   against `should_trigger`); `match` / `absent` / `judge` add output checks.
-- A **placeholder prompt** (contains `<...>`) marks the case as *unwritten* — it
+- A **placeholder prompt** (contains `<...>`) marks the case as _unwritten_ — it
   is reported as TODO and fails `--ci`, so `init` output can't silently pass.
 
 ## `init` — scaffold, don't generate
@@ -92,11 +92,12 @@ and `total_cost_usd`. (Schema verified on Claude Code 2.1.x.)
 
 **Early-exit** (cost saver, borrowed from skill-creator's `run_eval.py`): when a
 case has only trigger checks,
+
 - `should_trigger: true` → kill the process the moment the target skill fires
   (fast pass);
-- `should_trigger: false` → kill the moment *any* skill fires (fast fail);
-otherwise run to completion (needed for `match`/`absent`/`judge`), with a low
-`--max-turns` to bound negatives.
+- `should_trigger: false` → kill the moment _any_ skill fires (fast fail);
+  otherwise run to completion (needed for `match`/`absent`/`judge`), with a low
+  `--max-turns` to bound negatives.
 
 ## Scoring
 

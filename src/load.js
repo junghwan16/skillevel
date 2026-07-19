@@ -1,18 +1,65 @@
 /**
- * @file Reads and validates a cases file.
+ * @file Reads and validates cases files, and resolves a target (a file, a skill
+ * name, or nothing) into the set of suites to run.
  */
 
 import fs from "node:fs";
+import path from "node:path";
 import { parse } from "yaml";
+import { discover } from "./discover.js";
 
 /**
- * Whether a prompt is still an unwritten placeholder (contains `<...>`).
+ * A file that could not be loaded.
  *
- * @param {string} prompt
- * @returns {boolean}
+ * @typedef {object} SkippedFile
+ * @property {string} file
+ * @property {Error} error
  */
-export function isPlaceholder(prompt) {
-  return /<[^>]+>/.test(prompt);
+
+/**
+ * Resolve `target` into loaded, filtered suites plus any files that failed to
+ * load. Pure and non-mutating — filtered suites are fresh copies.
+ *
+ * @param {string} [target]      A skill name or an eval file path.
+ * @param {string} [caseFilter]  Keep only cases whose id contains this.
+ * @returns {{ suites: import('./types.js').Suite[], skipped: SkippedFile[] }}
+ */
+export function collectSuites(target, caseFilter) {
+  /** @type {import('./types.js').Suite[]} */
+  const suites = [];
+  /** @type {SkippedFile[]} */
+  const skipped = [];
+
+  for (const file of filesForTarget(target)) {
+    try {
+      const suite = loadSuite(file);
+      const cases = caseFilter
+        ? suite.cases.filter((testCase) => testCase.id.includes(caseFilter))
+        : suite.cases;
+      if (cases.length > 0)
+        suites.push(cases === suite.cases ? suite : { ...suite, cases });
+    } catch (error) {
+      skipped.push({ file, error: /** @type {Error} */ (error) });
+    }
+  }
+  return { suites, skipped };
+}
+
+/**
+ * The candidate eval files for a target (a file, a skill name, or everything).
+ *
+ * @param {string} [target]
+ * @returns {string[]}
+ */
+function filesForTarget(target) {
+  if (target && fs.statSync(target, { throwIfNoEntry: false })?.isFile())
+    return [target];
+  const all = discover();
+  if (!target) return all;
+  return all.filter(
+    (file) =>
+      path.basename(path.dirname(file)) === target || file.includes(target),
+  );
 }
 
 /**
@@ -25,18 +72,30 @@ export function isPlaceholder(prompt) {
 export function loadSuite(filePath) {
   /** @type {import('./types.js').Suite} */
   const suite = parse(fs.readFileSync(filePath, "utf8"));
-  assert(suite && typeof suite.skill === "string", `${filePath}: missing 'skill'`);
-  assert(Array.isArray(suite.cases) && suite.cases.length > 0, `${filePath}: no 'cases'`);
+  assert(
+    suite && typeof suite.skill === "string",
+    `${filePath}: missing 'skill'`,
+  );
+  assert(
+    Array.isArray(suite.cases) && suite.cases.length > 0,
+    `${filePath}: no 'cases'`,
+  );
 
   const seenIds = new Set();
   for (const testCase of suite.cases) {
     assert(testCase.id, `${filePath}: a case is missing 'id'`);
-    assert(testCase.prompt, `${filePath}: case '${testCase.id}' is missing 'prompt'`);
+    assert(
+      testCase.prompt,
+      `${filePath}: case '${testCase.id}' is missing 'prompt'`,
+    );
     assert(
       typeof testCase.should_trigger === "boolean",
       `${filePath}: case '${testCase.id}' needs 'should_trigger: true|false'`,
     );
-    assert(!seenIds.has(testCase.id), `${filePath}: duplicate case id '${testCase.id}'`);
+    assert(
+      !seenIds.has(testCase.id),
+      `${filePath}: duplicate case id '${testCase.id}'`,
+    );
     seenIds.add(testCase.id);
   }
 

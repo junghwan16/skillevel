@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parse } from "yaml";
+import { walkDir } from "./fswalk.js";
 
 /**
  * @typedef {object} SkillMeta
@@ -32,34 +33,31 @@ export function findSkill(name, root = process.cwd()) {
   const local = findLocalSkillMd(root, name);
   if (local) return readMeta(local, "local");
 
-  const installed = path.join(os.homedir(), ".claude", "skills", name, "SKILL.md");
+  const installed = path.join(
+    os.homedir(),
+    ".claude",
+    "skills",
+    name,
+    "SKILL.md",
+  );
   return fs.existsSync(installed) ? readMeta(installed, "installed") : null;
 }
 
 /**
- * Depth-limited search for `<dir>/**\/<name>/SKILL.md`.
+ * Find the `SKILL.md` of the first directory named `name` under `root`.
  *
- * @param {string} dir
+ * @param {string} root
  * @param {string} name
- * @param {number} [depth]
  * @returns {string | null}
  */
-function findLocalSkillMd(dir, name, depth = 0) {
-  if (depth > MAX_WALK_DEPTH) return null;
-  let entries;
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() || SKIP_DIRS.has(entry.name)) continue;
-    if (entry.name === name) {
-      const candidate = path.join(dir, entry.name, "SKILL.md");
-      if (fs.existsSync(candidate)) return candidate;
-    }
-    const nested = findLocalSkillMd(path.join(dir, entry.name), name, depth + 1);
-    if (nested) return nested;
+function findLocalSkillMd(root, name) {
+  for (const { path: dirPath, entry } of walkDir(root, {
+    skip: SKIP_DIRS,
+    maxDepth: MAX_WALK_DEPTH,
+  })) {
+    if (!entry.isDirectory() || entry.name !== name) continue;
+    const candidate = path.join(dirPath, "SKILL.md");
+    if (fs.existsSync(candidate)) return candidate;
   }
   return null;
 }
@@ -88,6 +86,8 @@ function readMeta(skillMdPath, source) {
     }
   }
 
-  const triggers = description.match(/(?:triggers?)\s*[:—-]\s*(.+)/i)?.[1]?.trim();
+  const triggers = description
+    .match(/(?:triggers?)\s*[:—-]\s*(.+)/i)?.[1]
+    ?.trim();
   return { path: skillMdPath, source, name, description, triggers };
 }

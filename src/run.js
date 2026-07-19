@@ -5,8 +5,15 @@
 
 import { runClaude } from "./claude.js";
 import { evaluateTrial } from "./assert.js";
-import { isPlaceholder } from "./load.js";
-import { DEFAULT_CONCURRENCY, DEFAULT_THRESHOLD, DEFAULT_TRIALS, HAPPY_MAX_TURNS, NEGATIVE_MAX_TURNS, RUN_TIMEOUT_MS } from "./constants.js";
+import { isUnwritten, hasOutputChecks } from "./testcase.js";
+import {
+  DEFAULT_CONCURRENCY,
+  DEFAULT_THRESHOLD,
+  DEFAULT_TRIALS,
+  HAPPY_MAX_TURNS,
+  NEGATIVE_MAX_TURNS,
+  RUN_TIMEOUT_MS,
+} from "./constants.js";
 
 /**
  * Run configuration shared across suites.
@@ -27,7 +34,8 @@ import { DEFAULT_CONCURRENCY, DEFAULT_THRESHOLD, DEFAULT_TRIALS, HAPPY_MAX_TURNS
  * @returns {Promise<import('./types.js').SuiteResult[]>}
  */
 export async function runSuites(suites, config = {}) {
-  const results = suites.map(emptyResult);
+  const defaultThreshold = config.threshold ?? DEFAULT_THRESHOLD;
+  const results = suites.map((suite) => emptyResult(suite, defaultThreshold));
   /** @type {Array<() => Promise<void>>} */
   const jobs = [];
 
@@ -37,16 +45,21 @@ export async function runSuites(suites, config = {}) {
       const caseResult = blankCaseResult(testCase.id, suite.skill);
       results[suiteIndex].cases.push(caseResult);
 
-      if (isPlaceholder(testCase.prompt)) {
+      if (isUnwritten(testCase)) {
         caseResult.status = "todo"; // unwritten — nothing to run
         continue;
       }
-      for (const job of caseJobs(testCase, suite, model, config, caseResult)) jobs.push(job);
+      for (const job of caseJobs(testCase, suite, model, config, caseResult))
+        jobs.push(job);
     }
   });
 
-  await runPool(jobs, config.concurrency ?? DEFAULT_CONCURRENCY, config.onProgress);
-  finalizeScores(suites, results, config.threshold ?? DEFAULT_THRESHOLD);
+  await runPool(
+    jobs,
+    config.concurrency ?? DEFAULT_CONCURRENCY,
+    config.onProgress,
+  );
+  finalizeScores(results);
   return results;
 }
 
@@ -63,7 +76,9 @@ export async function runSuites(suites, config = {}) {
 function caseJobs(testCase, suite, model, config, caseResult) {
   const trials = testCase.trials ?? suite.trials ?? DEFAULT_TRIALS;
   const stopOnSkill = makeStopPredicate(testCase, suite.skill);
-  const maxTurns = testCase.should_trigger ? HAPPY_MAX_TURNS : NEGATIVE_MAX_TURNS;
+  const maxTurns = testCase.should_trigger
+    ? HAPPY_MAX_TURNS
+    : NEGATIVE_MAX_TURNS;
 
   return Array.from({ length: trials }, () => async () => {
     const outcome = await runClaude(testCase.prompt, {
@@ -73,46 +88,52 @@ function caseJobs(testCase, suite, model, config, caseResult) {
       stopOnSkill,
     });
     const checks = await evaluateTrial(testCase, suite.skill, outcome, model);
-    caseResult.trials.push({ outcome, checks, pass: checks.every((check) => check.ok) });
+    caseResult.trials.push({
+      outcome,
+      checks,
+      pass: checks.every((check) => check.ok),
+    });
     caseResult.costUsd += outcome.costUsd;
   });
 }
 
 /**
  * Decide when a run can stop early. Only the trigger verdict allows it — cases
- * with output checks (`match`/`absent`/`judge`) must run to completion.
+ * with output checks must run to completion.
  *
  * @param {import('./types.js').TestCase} testCase
  * @param {string} skill
  * @returns {(firedSkill: string) => boolean}
  */
 function makeStopPredicate(testCase, skill) {
-  const hasOutputChecks = (testCase.expect ?? []).some((expectation) => typeof expectation === "object");
+  const runToCompletion = testCase.should_trigger && hasOutputChecks(testCase);
   return (firedSkill) => {
     if (firedSkill !== skill) return false; // other skills don't affect this check
     // "must not fire" → fail fast; "should fire" (trigger-only) → pass fast
-    return testCase.should_trigger ? !hasOutputChecks : true;
+    return !runToCompletion;
   };
 }
 
 /**
- * Compute each case's pass-rate and status.
+ * Compute each case's passed count, pass-rate, and status.
  *
- * @param {import('./types.js').Suite[]} suites
  * @param {import('./types.js').SuiteResult[]} results
- * @param {number} defaultThreshold
  * @returns {void}
  */
-function finalizeScores(suites, results, defaultThreshold) {
-  suites.forEach((suite, suiteIndex) => {
-    const threshold = suite.triggerThreshold ?? defaultThreshold;
-    for (const caseResult of results[suiteIndex].cases) {
+function finalizeScores(results) {
+  for (const suiteResult of results) {
+    for (const caseResult of suiteResult.cases) {
       if (caseResult.status === "todo") continue;
-      const passed = caseResult.trials.filter((trial) => trial.pass).length;
-      caseResult.passRate = caseResult.trials.length ? passed / caseResult.trials.length : 0;
-      caseResult.status = caseResult.passRate >= threshold ? "pass" : "fail";
+      caseResult.passed = caseResult.trials.filter(
+        (trial) => trial.pass,
+      ).length;
+      caseResult.passRate = caseResult.trials.length
+        ? caseResult.passed / caseResult.trials.length
+        : 0;
+      caseResult.status =
+        caseResult.passRate >= suiteResult.threshold ? "pass" : "fail";
     }
-  });
+  }
 }
 
 /**
@@ -132,15 +153,23 @@ async function runPool(jobs, size, onProgress) {
       onProgress?.(++done, jobs.length);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(size, jobs.length) }, worker));
+  await Promise.all(
+    Array.from({ length: Math.min(size, jobs.length) }, worker),
+  );
 }
 
 /**
  * @param {import('./types.js').Suite} suite
+ * @param {number} defaultThreshold
  * @returns {import('./types.js').SuiteResult}
  */
-function emptyResult(suite) {
-  return { skill: suite.skill, file: suite.file ?? "", cases: [] };
+function emptyResult(suite, defaultThreshold) {
+  return {
+    skill: suite.skill,
+    file: suite.file ?? "",
+    threshold: suite.triggerThreshold ?? defaultThreshold,
+    cases: [],
+  };
 }
 
 /**
@@ -149,5 +178,13 @@ function emptyResult(suite) {
  * @returns {import('./types.js').CaseResult}
  */
 function blankCaseResult(id, skill) {
-  return { id, skill, status: "pass", passRate: 0, trials: [], costUsd: 0 };
+  return {
+    id,
+    skill,
+    status: "pass",
+    passRate: 0,
+    passed: 0,
+    trials: [],
+    costUsd: 0,
+  };
 }

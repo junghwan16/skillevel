@@ -83,6 +83,7 @@
  * @property {string} skill
  * @property {CaseStatus} status
  * @property {number} passRate               Fraction of trials that passed (0..1).
+ * @property {number} passed                 Number of trials that passed.
  * @property {TrialResult[]} trials
  * @property {number} costUsd
  */
@@ -93,6 +94,7 @@
  * @typedef {object} SuiteResult
  * @property {string} skill
  * @property {string} file
+ * @property {number} threshold              Green pass-rate threshold for this suite.
  * @property {CaseResult[]} cases
  */
 

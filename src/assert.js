@@ -16,13 +16,20 @@ import { DEFAULT_JUDGE_MODEL, JUDGE_TIMEOUT_MS } from "./constants.js";
  * @returns {Promise<import('./types.js').CheckResult[]>}
  */
 export async function evaluateTrial(testCase, skill, outcome, judgeModel) {
-  const checks = [triggerCheck(testCase, skill, outcome)];
-  for (const expectation of testCase.expect ?? []) {
-    // trigger shorthands are already covered by the primary check above
-    if (expectation === "triggered" || expectation === "not_triggered") continue;
-    checks.push(await evaluateExpectation(expectation, outcome, judgeModel));
-  }
-  return checks;
+  // trigger shorthands are already covered by the primary check; the rest are
+  // independent, so evaluate them concurrently (a `judge` check spawns a subprocess)
+  const outputChecks =
+    /** @type {Array<Exclude<import('./types.js').Expectation, string>>} */ (
+      (testCase.expect ?? []).filter(
+        (expectation) => typeof expectation === "object",
+      )
+    );
+  const evaluated = await Promise.all(
+    outputChecks.map((expectation) =>
+      evaluateExpectation(expectation, outcome, judgeModel),
+    ),
+  );
+  return [triggerCheck(testCase, skill, outcome), ...evaluated];
 }
 
 /**
@@ -37,9 +44,13 @@ function triggerCheck(testCase, skill, outcome) {
   const fired = outcome.skillsFired.includes(skill);
   const ok = fired === testCase.should_trigger;
   return {
-    label: testCase.should_trigger ? `triggers ${skill}` : `stays out (${skill})`,
+    label: testCase.should_trigger
+      ? `triggers ${skill}`
+      : `stays out (${skill})`,
     ok,
-    detail: ok ? undefined : `fired: ${outcome.skillsFired.join(", ") || "none"}`,
+    detail: ok
+      ? undefined
+      : `fired: ${outcome.skillsFired.join(", ") || "none"}`,
   };
 }
 
@@ -53,10 +64,16 @@ function triggerCheck(testCase, skill, outcome) {
  */
 async function evaluateExpectation(expectation, outcome, judgeModel) {
   if ("match" in expectation) {
-    return { label: `match /${expectation.match}/`, ok: toRegExp(expectation.match).test(outcome.text) };
+    return {
+      label: `match /${expectation.match}/`,
+      ok: toRegExp(expectation.match).test(outcome.text),
+    };
   }
   if ("absent" in expectation) {
-    return { label: `absent /${expectation.absent}/`, ok: !toRegExp(expectation.absent).test(outcome.text) };
+    return {
+      label: `absent /${expectation.absent}/`,
+      ok: !toRegExp(expectation.absent).test(outcome.text),
+    };
   }
   if ("judge" in expectation) {
     const verdict = await judge(expectation.judge, outcome.text, judgeModel);
@@ -100,7 +117,11 @@ async function judge(question, answer, model = DEFAULT_JUDGE_MODEL) {
     'Reply with exactly "PASS" or "FAIL" as the first word, then a one-line reason.',
   ].join("\n");
 
-  const outcome = await runClaude(prompt, { model, maxTurns: 1, timeoutMs: JUDGE_TIMEOUT_MS });
+  const outcome = await runClaude(prompt, {
+    model,
+    maxTurns: 1,
+    timeoutMs: JUDGE_TIMEOUT_MS,
+  });
   return {
     ok: /^\s*pass\b/i.test(outcome.text),
     reason: outcome.text.split("\n").slice(1).join(" ").trim().slice(0, 140),

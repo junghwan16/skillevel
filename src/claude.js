@@ -4,6 +4,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import readline from "node:readline";
 import { RUN_TIMEOUT_MS } from "./constants.js";
 
@@ -40,7 +41,12 @@ export async function runClaude(prompt, options = {}) {
     stdio: ["ignore", "pipe", "pipe"],
   });
 
-  const collected = createCollector();
+  const skills = new Set();
+  const tools = new Set();
+  let text = "";
+  let costUsd = 0;
+  let numTurns = 0;
+  let isError = false;
   let stoppedEarly = false;
   let timedOut = false;
 
@@ -49,25 +55,37 @@ export async function runClaude(prompt, options = {}) {
     child.kill("SIGKILL");
   }, options.timeoutMs ?? RUN_TIMEOUT_MS);
 
-  const lines = readline.createInterface({ input: child.stdout });
-  for await (const line of lines) {
+  for await (const line of readline.createInterface({ input: child.stdout })) {
     const event = parseJsonLine(line);
     if (!event) continue;
 
-    for (const skill of skillsInEvent(event, collected.tools)) {
-      collected.skills.add(skill);
+    for (const skill of skillsInEvent(event, tools)) {
+      skills.add(skill);
       if (options.stopOnSkill?.(skill)) {
         stoppedEarly = true;
         child.kill("SIGKILL");
       }
     }
-    if (event.type === "result") collected.absorbResult(event);
+    if (event.type === "result") {
+      text = event.result ?? text;
+      costUsd = event.total_cost_usd ?? costUsd;
+      numTurns = event.num_turns ?? numTurns;
+      isError = Boolean(event.is_error);
+    }
   }
 
   await once(child, "close");
   clearTimeout(timer);
 
-  return collected.toOutcome({ suppressError: stoppedEarly || timedOut });
+  return {
+    text,
+    skillsFired: [...skills],
+    toolsUsed: [...tools],
+    costUsd,
+    numTurns,
+    // an early stop or timeout is expected control flow, not a real failure
+    isError: isError && !(stoppedEarly || timedOut),
+  };
 }
 
 /**
@@ -116,61 +134,13 @@ function skillsInEvent(event, toolSink) {
     if (block?.type !== "tool_use") continue;
     if (block.name) toolSink.add(block.name);
     if (block.name !== "Skill") continue;
-    const raw = block.input?.skill ?? block.input?.skill_name ?? block.input?.command ?? "";
+    const raw =
+      block.input?.skill ??
+      block.input?.skill_name ??
+      block.input?.command ??
+      "";
     const skill = String(raw).replace(/^\//, "");
     if (skill) skills.push(skill);
   }
   return skills;
-}
-
-/**
- * Accumulates state across the event stream and produces a {@link RunOutcome}.
- *
- * @returns {{
- *   skills: Set<string>,
- *   tools: Set<string>,
- *   absorbResult: (event: Record<string, any>) => void,
- *   toOutcome: (opts: { suppressError: boolean }) => import('./types.js').RunOutcome,
- * }}
- */
-function createCollector() {
-  const skills = new Set();
-  const tools = new Set();
-  let text = "";
-  let costUsd = 0;
-  let numTurns = 0;
-  let isError = false;
-
-  return {
-    skills,
-    tools,
-    absorbResult(event) {
-      text = event.result ?? text;
-      costUsd = event.total_cost_usd ?? costUsd;
-      numTurns = event.num_turns ?? numTurns;
-      isError = Boolean(event.is_error);
-    },
-    toOutcome({ suppressError }) {
-      return {
-        text,
-        skillsFired: [...skills],
-        toolsUsed: [...tools],
-        costUsd,
-        numTurns,
-        // an early stop or timeout is expected control flow, not a real failure
-        isError: isError && !suppressError,
-      };
-    },
-  };
-}
-
-/**
- * Resolve once an emitter fires an event.
- *
- * @param {import('node:events').EventEmitter} emitter
- * @param {string} event
- * @returns {Promise<void>}
- */
-function once(emitter, event) {
-  return new Promise((resolve) => emitter.once(event, () => resolve()));
 }
