@@ -106,6 +106,10 @@ non-zero, and `bench --min-lift <pp>` fails when the lift drops too low.
 Suites are discovered automatically: any `*.eval.yaml` (or `evals/cases.yaml`)
 under the current directory.
 
+See [`examples/`](./examples/) for worked suites — including two that were
+produced by dogfooding skillevel against real installed skills (`code-review`
+and a `writing-skills` ↔ `skill-eval` routing collision).
+
 ## Writing cases
 
 The format is the community `evals/cases.yaml` schema (from the `skill-eval`
@@ -121,8 +125,10 @@ Every case is a `prompt` plus a trigger expectation — either
 ```
 
 `expect_skill: <sibling>` pins down the #1 failure mode of a growing skill
-collection — two skills fighting over the same prompts. `expect_skill: none`
-asserts no skill fires at all.
+collection — two skills fighting over the same prompts. It passes only when the
+named sibling **actually fires** _and_ the suite's own skill stays out, so a
+green routing case proves the collision landed right — not merely that the
+target kept quiet. `expect_skill: none` asserts no skill fires at all.
 
 `expect` adds optional checks on the response itself:
 
