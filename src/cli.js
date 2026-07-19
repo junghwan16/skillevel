@@ -5,11 +5,9 @@
  */
 
 import fs from "node:fs";
-import path from "node:path";
 import { Command } from "commander";
 import pc from "picocolors";
-import { discover } from "./discover.js";
-import { loadSuite } from "./load.js";
+import { collectSuites } from "./load.js";
 import { runSuites } from "./run.js";
 import { render, renderSummary, summarize } from "./report.js";
 import { initSuite } from "./init.js";
@@ -71,10 +69,13 @@ function main() {
  * @returns {Promise<void>}
  */
 async function runCommand(target, options) {
-  const suites = resolveSuites(
+  const { suites, skipped } = collectSuites(
     typeof target === "string" ? target : undefined,
-    /** @type {string} */ (options.filter),
+    /** @type {string | undefined} */ (options.filter),
   );
+  for (const { file, error } of skipped) {
+    console.error(pc.red(`skip ${file}: ${error.message}`));
+  }
   if (suites.length === 0) {
     console.error(
       pc.yellow(
@@ -118,14 +119,19 @@ async function executeAndReport(suites, config, options) {
   process.stdout.write(`\r${" ".repeat(30)}\r`); // clear progress line
 
   const reporter = /** @type {string} */ (options.reporter);
-  console.log(render(results, reporter));
-  console.log(renderSummary(summarize(results)));
+  const rendered = render(results, reporter);
+  const summary = summarize(results);
+  console.log(rendered);
+  console.log(renderSummary(summary));
 
   if (typeof options.json === "string") {
-    fs.writeFileSync(options.json, render(results, "json"));
+    fs.writeFileSync(
+      options.json,
+      reporter === "json" ? rendered : render(results, "json"),
+    );
     console.log(pc.dim(`\nwrote ${options.json}`));
   }
-  return summarize(results);
+  return summary;
 }
 
 /**
@@ -146,50 +152,6 @@ function initCommand(skill, file) {
     console.error(pc.red(/** @type {Error} */ (error).message));
     process.exit(1);
   }
-}
-
-/**
- * Resolve the target into loaded, filtered suites.
- *
- * @param {string | undefined} target      A skill name or an eval file path.
- * @param {string | undefined} caseFilter  Keep only cases whose id contains this.
- * @returns {import('./types.js').Suite[]}
- */
-function resolveSuites(target, caseFilter) {
-  const files = filesForTarget(target);
-  const suites = [];
-  for (const file of files) {
-    try {
-      const suite = loadSuite(file);
-      if (caseFilter)
-        suite.cases = suite.cases.filter((testCase) =>
-          testCase.id.includes(caseFilter),
-        );
-      if (suite.cases.length > 0) suites.push(suite);
-    } catch (error) {
-      console.error(
-        pc.red(`skip ${file}: ${/** @type {Error} */ (error).message}`),
-      );
-    }
-  }
-  return suites;
-}
-
-/**
- * The candidate eval files for a target (a file, a skill name, or everything).
- *
- * @param {string | undefined} target
- * @returns {string[]}
- */
-function filesForTarget(target) {
-  if (target && fs.existsSync(target) && fs.statSync(target).isFile())
-    return [target];
-  const all = discover();
-  if (!target) return all;
-  return all.filter(
-    (file) =>
-      path.basename(path.dirname(file)) === target || file.includes(target),
-  );
 }
 
 /**
@@ -237,7 +199,9 @@ function watchTargets(suites) {
   const targets = new Set();
   for (const suite of suites) {
     if (suite.file) targets.add(suite.file);
-    const meta = findSkill(suite.skill);
+  }
+  for (const skill of new Set(suites.map((suite) => suite.skill))) {
+    const meta = findSkill(skill);
     if (meta) targets.add(meta.path);
   }
   return [...targets];
