@@ -11,7 +11,10 @@ import { collectSuites } from "./load.js";
 import { runSuites } from "./run.js";
 import { render, renderSummary, summarize } from "./report.js";
 import { initSuite } from "./init.js";
-import { findSkill } from "./resolve.js";
+import { newSkill } from "./scaffold.js";
+import { lintSkillMd } from "./lint.js";
+import { formatSkillMd } from "./fmt.js";
+import { findSkill, resolveSkillMds } from "./resolve.js";
 import { DEFAULT_CONCURRENCY, DEFAULT_THRESHOLD } from "./constants.js";
 
 const WATCH_DEBOUNCE_MS = 300;
@@ -57,6 +60,26 @@ function main() {
       "Scaffold a cases file for a skill (template + guidance; you write the cases)",
     )
     .action(initCommand);
+
+  program
+    .command("new <skill> [dir]")
+    .description(
+      "Scaffold a new skill directory with a starter SKILL.md (template + guidance)",
+    )
+    .action(newCommand);
+
+  program
+    .command("lint [targets...]")
+    .description(
+      "Lint SKILL.md files: packaging errors + authoring-guidance warnings",
+    )
+    .action(lintCommand);
+
+  program
+    .command("fmt [targets...]")
+    .description("Normalise SKILL.md frontmatter and whitespace")
+    .option("--check", "report files that would change, without writing")
+    .action(fmtCommand);
 
   program.parseAsync();
 }
@@ -149,9 +172,136 @@ function initCommand(skill, file) {
     );
     console.log(pc.dim(`edit it, then: skillevel ${skill}`));
   } catch (error) {
-    console.error(pc.red(/** @type {Error} */ (error).message));
-    process.exit(1);
+    exitWith(error);
   }
+}
+
+/**
+ * The `new` command.
+ *
+ * @param {string} skill
+ * @param {string} [dir]
+ * @returns {void}
+ */
+function newCommand(skill, dir) {
+  try {
+    const { file } = newSkill(skill, dir);
+    console.log(pc.green(`created ${file}`));
+    console.log(
+      pc.dim(
+        `edit SKILL.md, then: skillevel init ${skill} && skillevel ${skill}`,
+      ),
+    );
+  } catch (error) {
+    exitWith(error);
+  }
+}
+
+/**
+ * The `lint` command.
+ *
+ * @param {string[]} targets
+ * @returns {void}
+ */
+function lintCommand(targets) {
+  const files = resolveSkillMdsOrExit(targets);
+  let errors = 0;
+  let warnings = 0;
+  for (const file of files) {
+    const { problems } = lintSkillMd(file);
+    if (problems.length === 0) {
+      console.log(`${pc.green("✓")} ${file}`);
+      continue;
+    }
+    console.log(file);
+    for (const { severity, rule, message } of problems) {
+      const paint = severity === "error" ? pc.red : pc.yellow;
+      console.log(`  ${paint(`${severity} ${rule}`)} — ${message}`);
+      if (severity === "error") errors += 1;
+      else warnings += 1;
+    }
+  }
+  const parts = [
+    countFiles(files.length),
+    errors ? pc.red(`${errors} errors`) : pc.dim("0 errors"),
+    warnings ? pc.yellow(`${warnings} warnings`) : pc.dim("0 warnings"),
+  ];
+  console.log(`\n${parts.join(pc.dim(" · "))}`);
+  process.exit(errors > 0 ? 1 : 0);
+}
+
+/**
+ * The `fmt` command.
+ *
+ * @param {string[]} targets
+ * @param {{ check?: boolean }} options
+ * @returns {void}
+ */
+function fmtCommand(targets, options) {
+  const files = resolveSkillMdsOrExit(targets);
+  let changed = 0;
+  let unreadable = 0;
+  for (const file of files) {
+    let source;
+    try {
+      source = fs.readFileSync(file, "utf8");
+    } catch (error) {
+      console.error(
+        pc.red(`cannot read ${file}: ${/** @type {Error} */ (error).message}`),
+      );
+      unreadable += 1;
+      continue;
+    }
+    const formatted = formatSkillMd(source);
+    if (formatted === source) continue; // untouched — no mtime churn
+    changed += 1;
+    if (options.check) {
+      console.log(pc.yellow(`would format ${file}`));
+    } else {
+      fs.writeFileSync(file, formatted);
+      console.log(pc.green(`formatted ${file}`));
+    }
+  }
+  if (changed === 0 && unreadable === 0) {
+    console.log(pc.dim(`${countFiles(files.length)} already formatted`));
+  }
+  process.exit(unreadable > 0 || (options.check && changed > 0) ? 1 : 0);
+}
+
+/**
+ * Resolve lint/fmt targets to `SKILL.md` paths (see `resolveSkillMds`), or
+ * print the failure and exit.
+ *
+ * @param {string[]} targets
+ * @returns {string[]}
+ */
+function resolveSkillMdsOrExit(targets) {
+  try {
+    return resolveSkillMds(targets);
+  } catch (error) {
+    return exitWith(error);
+  }
+}
+
+/**
+ * Print the error message in red and exit 1 — the shared command epilogue.
+ *
+ * @param {unknown} error
+ * @returns {never}
+ */
+function exitWith(error) {
+  console.error(pc.red(/** @type {Error} */ (error).message));
+  process.exit(1);
+}
+
+/**
+ * "1 file" / "3 files".
+ *
+ * @param {number} n
+ * @returns {string}
+ */
+function countFiles(n) {
+  return `${n} file${n === 1 ? "" : "s"}`;
 }
 
 /**

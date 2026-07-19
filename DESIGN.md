@@ -35,6 +35,9 @@ skillevel -t "negative"      # filter by case id/substring
 skillevel --reporter junit   # grid (default) · dot · json · junit
 skillevel --ci               # non-zero exit on any regression / unwritten case
 skillevel init sql           # scaffold a cases file from the skill (template + guidance)
+skillevel new sql            # scaffold sql/SKILL.md (template + authoring guidance)
+skillevel lint [target...]   # validate SKILL.md files (errors) + guidance heuristics (warnings)
+skillevel fmt [--check]      # conservative SKILL.md frontmatter/whitespace normalizer
 ```
 
 ## Case format (adopted from skill-eval)
@@ -77,6 +80,24 @@ cases:
 4. pulls the skill's own **trigger keywords verbatim** into a comment as a hint.
 
 The human writes the real cases — ideally from real usage/production traces.
+
+## Authoring toolchain — `new` / `lint` / `fmt`
+
+The same philosophy as `init`: **offline and deterministic**, templates and
+guidance only — never LLM-invented content.
+
+- `new` writes a starter `SKILL.md` whose placeholders are honest TODOs and
+  whose authoring guidance (triggering description, 500-line limit, progressive
+  disclosure) rides along as a deletable comment.
+- `lint` splits its findings by authority: **errors** are the packaging /
+  validation rules (ported from skill-creator's `quick_validate.py` — a skill
+  that fails them won't install cleanly); **warnings** are authoring guidance
+  (unwritten descriptions, leftover placeholders, broken `references/` paths,
+  over-length bodies) — judgement calls, so they never fail the exit code.
+- `fmt` is deliberately conservative: it normalises frontmatter key order and
+  whitespace, and when it can't parse the frontmatter it returns the file
+  untouched — the linter reports the problem; the formatter never destroys
+  content.
 
 ## Run mechanism
 

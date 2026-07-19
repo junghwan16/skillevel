@@ -26,3 +26,18 @@ export const JUDGE_TIMEOUT_MS = 60_000;
 
 /** Model used by the LLM judge when a suite does not specify one. */
 export const DEFAULT_JUDGE_MODEL = "sonnet";
+
+/** How deep skill discovery walks from its starting directory. */
+export const MAX_WALK_DEPTH = 6;
+
+/**
+ * Directories no discovery ever descends into. Eval discovery additionally
+ * skips dot-directories; skill walks must not (skills live in `.claude/`).
+ */
+export const WALK_SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  ".next",
+  "coverage",
+]);

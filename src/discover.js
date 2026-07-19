@@ -5,15 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { walkDir } from "./fswalk.js";
-
-/** Directories never worth descending into. */
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  ".next",
-  "coverage",
-]);
+import { WALK_SKIP_DIRS } from "./constants.js";
 
 /**
  * Whether a file is an eval file: `*.eval.yaml` / `*.eval.yml`, or an
@@ -42,7 +34,7 @@ export function discover(root = process.cwd()) {
 
   const found = [];
   for (const { path: filePath, entry } of walkDir(root, {
-    skip: SKIP_DIRS,
+    skip: WALK_SKIP_DIRS,
     skipDotDirs: true,
   })) {
     if (!entry.isDirectory() && isEvalFile(filePath)) found.push(filePath);

@@ -56,6 +56,27 @@ skillevel                    # run every *.eval.yaml it can find
 skillevel --watch            # re-run on SKILL.md / case edits
 skillevel --ci               # exit non-zero on any failure or unwritten case
 skillevel -r junit --json out.json
+
+skillevel new my-skill       # scaffold my-skill/SKILL.md (template + guidance)
+skillevel lint [skill|path]  # validate SKILL.md files; no target = all under cwd
+skillevel fmt --check        # normalize SKILL.md frontmatter (or report drift)
+```
+
+## Authoring
+
+Besides running evals, skillevel covers the write side of the loop — offline
+and deterministic, like `init`. `new` scaffolds a skill directory whose
+`SKILL.md` has the authoring guidance baked in as a comment; `lint` checks the
+result with skill-creator's validation rules (errors) plus guidance heuristics
+like TODOs, placeholders, and broken `references/` paths (warnings); `fmt` is a
+conservative formatter that normalizes frontmatter and whitespace but never
+rewrites prose.
+
+```bash
+skillevel new sql            # sql/SKILL.md, ready to fill in
+# ...write the skill...
+skillevel lint sql && skillevel fmt sql
+skillevel init sql && skillevel sql   # then eval its triggering
 ```
 
 ## Cases
