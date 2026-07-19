@@ -141,18 +141,19 @@ skillevel bench [target] --vs <ref>
 
 Reuses two things that already exist rather than inventing new plumbing:
 
-1. **Isolated `cwd` per arm.** `runClaude` already accepts `options.cwd`
-   (`src/claude.js:18`) — DESIGN.md's `--skill-dir` papercut (#2 in the
-   dogfooding notes) wants this for reproducible working-copy runs anyway.
+1. **Isolated `cwd` per arm.** The agent runner already accepts
+   `options.cwd` (`AgentRunOptions` in `src/agent/agent-runner.ts`) —
+   DESIGN.md's `--skill-dir` papercut (#2 in the dogfooding notes) wants
+   this for reproducible working-copy runs anyway.
    `--vs` needs the same primitive: materialize the **old** version of
    `SKILL.md` (and `references/` if present) into a throwaway temp dir laid
    out as `.claude/skills/<name>/SKILL.md`, then run that arm with
    `cwd: tmpDirOld`. The **new** arm runs with the working copy as it does
    today (`cwd` unset / repo root) — no working-copy checkout needed since
    it's already on disk.
-2. **The existing bench arm/grading loop.** `armJob` in `src/bench.js`
+2. **The existing bench arm/grading loop.** `armJob` in `src/core/bench-runner.ts`
    already runs a case twice and grades both with `evaluateOutputChecks`
-   (no trigger check — confirmed content-only, see `src/assert.js:24-25`).
+   (no trigger check — confirmed content-only, see `evaluateOutputChecks` in `src/core/checks.ts`).
    `--vs` mode swaps what varies between the two calls: today it's
    `disallowSkills: true/false` on the _same_ installed skill; in `--vs`
    mode it's `cwd: tmpDirOld` vs. `cwd: undefined` (or the working copy's own

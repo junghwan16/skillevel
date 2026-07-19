@@ -20,6 +20,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      - run: npm run build
+      - run: npm test
       # Offline smoke only: `--version` + a no-match run exercise the whole
       # module graph and CLI without a `claude` login. The real trigger eval
       # (which shells out to `claude -p`) runs locally, not in CI.

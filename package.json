@@ -4,18 +4,23 @@
   "description": "A test runner and authoring toolchain for Claude Code skills — vitest for skills. Scaffold, lint, and format SKILL.md files, run YAML cases through `claude -p` to check that each skill triggers the way it should, and bench the skill-on/off lift to see if it actually helps.",
   "type": "module",
   "bin": {
-    "skillevel": "src/cli.js"
+    "skillevel": "dist/cli.js"
   },
   "scripts": {
-    "start": "node src/cli.js",
-    "smoke": "node src/cli.js --version && node src/cli.js __no_such_skill__ && node src/cli.js bench __no_such_skill__",
+    "build": "tsc",
+    "prepack": "npm run build",
+    "start": "npm run build && node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node dist/cli.js --version && node dist/cli.js __no_such_skill__ && node dist/cli.js bench __no_such_skill__",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "files": [
-    "src"
+    "dist"
   ],
   "engines": {
     "node": ">=18"
@@ -49,9 +54,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.7.0",
-    "prettier": "^3.9.5"
+    "prettier": "^3.9.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
   }
 }
